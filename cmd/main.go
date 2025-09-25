@@ -11,6 +11,18 @@ func main() {
 
 	SuperFunction()
 	a()
+	recursive(10)
+	a()
+}
+
+func recursive(n int) {
+	defer tracer.EndTrace(tracer.BeginTrace(""))
+
+	if n <= 0 {
+		return
+	}
+
+	recursive(n - 1)
 }
 
 func a() {
