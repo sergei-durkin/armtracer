@@ -1,4 +1,4 @@
-package tracer
+package armtracer
 
 import (
 	"fmt"
