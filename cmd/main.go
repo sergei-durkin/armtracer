@@ -9,6 +9,7 @@ func main() {
 	tracer.Begin()
 	defer tracer.End()
 
+	SuperFunction()
 	a()
 }
 
@@ -30,6 +31,7 @@ func b() {
 	}
 
 	c()
+	d()
 }
 
 func c() {
@@ -57,5 +59,17 @@ func SuperFunction() {
 
 	for i := 0; i < 100000000; i++ {
 		_ = rand.Int63n(1 + int64(i))
+	}
+
+	GigaFunction()
+
+	GigaFunction()
+}
+
+func GigaFunction() {
+	defer tracer.EndTrace(tracer.BeginTrace("GigaFunction"))
+
+	for i := 0; i < 1000000000; i++ {
+		_ = i * i
 	}
 }
