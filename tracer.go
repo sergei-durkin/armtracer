@@ -4,14 +4,14 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"unsafe"
 )
 
 const (
 	size = 1 << 14
 )
 
-func getCnt() uint64
+func getCntvct() uint64
+func getCntfrq() uint64
 
 type trace struct {
 	pc   uintptr
@@ -22,6 +22,11 @@ type trace struct {
 
 	start uint64
 	end   uint64
+
+	cum  uint64
+	flat uint64
+
+	hit int32
 }
 
 type profiler struct {
@@ -30,87 +35,78 @@ type profiler struct {
 	start uint64
 	end   uint64
 
-	traces map[int32][]trace
+	traces []trace
 }
 
 var (
-	Profiler profiler
+	CPUFreqHz uint64 = 0
+	Profiler  profiler
 )
+
+func init() {
+	CPUFreqHz = getCntfrq()
+
+	fmt.Fprintf(os.Stderr, "CPU Frequency: %.2f MHz\n", float64(CPUFreqHz)/1e6)
+}
 
 //go:nosplit
 func BeginTrace(name string) trace {
-	ptr := getCallerPC(unsafe.Pointer(&name))
+	c, _, _, _ := runtime.Caller(1)
+	f := runtime.FuncForPC(c)
 
-	return begin(ptr, name)
+	return begin(f.Entry(), name)
 }
 
 //go:nosplit
 func EndTrace(t trace) {
-	t.end = getCnt()
-	Profiler.traces[t.id] = append(Profiler.traces[t.id], t)
+	t.end = getCntvct()
+
+	Profiler.traces[t.parrent].flat -= t.end - t.start
+
+	Profiler.traces[t.id].id = t.id
+	Profiler.traces[t.id].pc = t.pc
+	Profiler.traces[t.id].name = t.name
+	Profiler.traces[t.id].hit++
+
+	Profiler.traces[t.id].flat += t.end - t.start
+	Profiler.traces[t.id].cum += t.end - t.start
+
+	Profiler.traces[t.id].start = t.start
+	Profiler.traces[t.id].end = t.end
+
 	Profiler.current = t.parrent
 }
 
 func Begin() {
-	Profiler.traces = make(map[int32][]trace, size)
-	Profiler.start = getCnt()
-	Profiler.current = -1
+	Profiler.traces = make([]trace, size)
+	Profiler.start = getCntvct()
 }
 
 func End() {
-	Profiler.end = getCnt()
-	total := Profiler.end - Profiler.start
+	Profiler.end = getCntvct()
+	totalCycles := Profiler.end - Profiler.start
+	totalMsec := cyclesToMsec(totalCycles)
 
-	gh := make(map[int32][]trace)
-	for _, ts := range Profiler.traces {
-		for _, t := range ts {
-			if t.start == 0 {
-				continue
-			}
+	fmt.Fprintf(os.Stderr, "%8s %11s %11s %11s %8s %s\n", "Hits", "Avg (ms)", "Flat (ms)", "Cum (ms)", "Flat%", "Function")
 
-			gh[t.parrent] = append(gh[t.parrent], t)
+	sumElapsed := uint64(0)
+	for _, t := range Profiler.traces {
+		if t.hit == 0 {
+			continue
 		}
+
+		sumElapsed += t.flat
+		flatPercent := 100 * float64(t.flat) / float64(totalCycles)
+		avgCycles := t.flat / uint64(t.hit)
+		avgMsec := cyclesToMsec(avgCycles)
+
+		fmt.Fprintf(os.Stderr, "%8d %11.2f %11.2f %11.2f %7.2f%% %s\n", t.hit, avgMsec, cyclesToMsec(t.flat), cyclesToMsec(t.cum), flatPercent, t.name)
 	}
 
-	var printTraces func(t trace, prefix string, isLast bool)
-	printTraces = func(t trace, prefix string, isLast bool) {
-		conn := "└── "
-		if !isLast {
-			conn = "├── "
-		}
-
-		cum := t.end - t.start
-		flat := cum
-		if children, ok := gh[t.id]; ok {
-			for _, ct := range children {
-				flat -= ct.end - ct.start
-			}
-		}
-
-		cumPercent := float64(cum) * 100 / float64(total)
-		flatPercent := float64(flat) * 100 / float64(total)
-
-		fmt.Fprintf(os.Stderr, "%s%sTrace [%s]: flat: %d %.2f%% cum: %d %.2f%%\n", prefix, conn, t.name, flat, flatPercent, cum, cumPercent)
-
-		for i, c := range gh[t.id] {
-			next := prefix
-			if isLast {
-				next += "    "
-			} else {
-				next += "│   "
-			}
-
-			printTraces(c, next, i == len(gh[t.id])-1)
-		}
-	}
-
-	for i, ts := range gh[-1] {
-		printTraces(ts, "", i == len(gh[-1])-1)
-	}
-
-	fmt.Fprintf(os.Stderr, "Total: %d\n", Profiler.end-Profiler.start)
+	fmt.Fprintf(os.Stderr, "Total: time %.2fms, cycles %d, accounted %.2fms (%.2f%%)\n", totalMsec, totalCycles, cyclesToMsec(sumElapsed), 100*float64(sumElapsed)/float64(totalCycles))
 }
 
+//go:nosplit
 func begin(pc uintptr, name string) trace {
 	var t trace
 
@@ -124,21 +120,29 @@ func begin(pc uintptr, name string) trace {
 	}
 
 	t.pc = pc
-	t.id = int32(pc)
+	t.id = idx(pc)
 	t.name = name
 	t.parrent = Profiler.current
 	Profiler.current = t.id
 
-	t.start = getCnt()
+	t.start = getCntvct()
 
 	return t
 }
 
-func add(ptr unsafe.Pointer, x int) unsafe.Pointer {
-	return unsafe.Pointer(uintptr(ptr) + uintptr(x))
+func idx(pc uintptr) int32 {
+	res := int32(pc % size)
+	if res == 0 {
+		return 1
+	}
+
+	return res
 }
 
-//go:nosplit
-func getCallerPC(ptr unsafe.Pointer) uintptr {
-	return *(*uintptr)(add(ptr, -int(unsafe.Sizeof(ptr))))
+func cyclesToMsec(c uint64) float64 {
+	if CPUFreqHz == 0 {
+		return 0
+	}
+
+	return 1000 * float64(c) / float64(CPUFreqHz)
 }
