@@ -1,8 +1,9 @@
 package main
 
 import (
-	"armtracer"
 	"math/rand"
+
+	"github.com/sergei-durkin/armtracer"
 )
 
 func main() {
