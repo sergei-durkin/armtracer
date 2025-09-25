@@ -1,13 +1,13 @@
 package main
 
 import (
+	"armtracer"
 	"math/rand"
-	"tracer"
 )
 
 func main() {
-	tracer.Begin()
-	defer tracer.End()
+	armtracer.Begin()
+	defer armtracer.End()
 
 	SuperFunction()
 	a()
@@ -16,7 +16,7 @@ func main() {
 }
 
 func recursive(n int) {
-	defer tracer.EndTrace(tracer.BeginTrace(""))
+	defer armtracer.EndTrace(armtracer.BeginTrace(""))
 
 	if n <= 0 {
 		return
@@ -26,7 +26,7 @@ func recursive(n int) {
 }
 
 func a() {
-	defer tracer.EndTrace(tracer.BeginTrace("a"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("a"))
 
 	for i := 0; i < 10000; i++ {
 		_ = i * i
@@ -36,7 +36,7 @@ func a() {
 }
 
 func b() {
-	defer tracer.EndTrace(tracer.BeginTrace("b"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("b"))
 
 	for i := 0; i < 100000000; i++ {
 		_ = rand.Int63n(1 + int64(i))
@@ -47,7 +47,7 @@ func b() {
 }
 
 func c() {
-	defer tracer.EndTrace(tracer.BeginTrace("c"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("c"))
 
 	for i := 0; i < 100000000; i++ {
 		_ = i * i
@@ -57,7 +57,7 @@ func c() {
 }
 
 func d() {
-	defer tracer.EndTrace(tracer.BeginTrace("d"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("d"))
 
 	for i := 0; i < 100000; i++ {
 		_ = i * i
@@ -67,7 +67,7 @@ func d() {
 }
 
 func SuperFunction() {
-	defer tracer.EndTrace(tracer.BeginTrace("SuperFunction"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("SuperFunction"))
 
 	for i := 0; i < 100000000; i++ {
 		_ = rand.Int63n(1 + int64(i))
@@ -79,7 +79,7 @@ func SuperFunction() {
 }
 
 func GigaFunction() {
-	defer tracer.EndTrace(tracer.BeginTrace("GigaFunction"))
+	defer armtracer.EndTrace(armtracer.BeginTrace("GigaFunction"))
 
 	for i := 0; i < 1000000000; i++ {
 		_ = i * i
