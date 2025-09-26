@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand"
+	"time"
 
 	"github.com/sergei-durkin/armtracer"
 )
@@ -14,6 +15,41 @@ func main() {
 	a()
 	recursive(10)
 	a()
+
+	compareWithTimer(int64(1e7))
+}
+
+func compareWithTimer(cycles int64) {
+	defer armtracer.EndTrace(armtracer.BeginTrace("e"))
+
+	t1 := armtracer.BeginTrace("tracerCalls")
+	for i := int64(0); i < cycles; i++ {
+		millionTracerCalls()
+	}
+	armtracer.EndTrace(t1)
+
+	t := armtracer.BeginTrace("timerCalls")
+	for i := int64(0); i < cycles; i++ {
+		millionTimerCalls()
+	}
+	armtracer.EndTrace(t)
+}
+
+func millionTracerCalls() {
+	defer armtracer.EndTrace(armtracer.BeginTrace(""))
+
+	_ = 1 + 1
+}
+
+var elapsed int64
+
+func millionTimerCalls() {
+	t := time.Now().UnixNano()
+	defer func() {
+		elapsed += time.Now().UnixNano() - t
+	}()
+
+	_ = 1 + 1
 }
 
 func recursive(n int) {

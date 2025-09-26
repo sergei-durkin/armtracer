@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sort"
+	"unsafe"
 )
 
 const (
@@ -51,7 +53,9 @@ func init() {
 
 //go:nosplit
 func BeginTrace(name string) trace {
-	return begin(name)
+	pc := caller(unsafe.Pointer(&name))
+
+	return begin(pc, name)
 }
 
 //go:nosplit
@@ -86,8 +90,36 @@ func End() {
 
 	fmt.Fprintf(os.Stderr, "%8s %11s %11s %11s %8s %s\n", "Hits", "Avg (ms)", "Flat (ms)", "Cum (ms)", "Flat%", "Function")
 
+	traces := Profiler.traces
+	sort.Slice(traces, func(i, j int) bool {
+		if traces[i].hit == 0 {
+			return false
+		}
+		if traces[j].hit == 0 {
+			return true
+		}
+
+		flatAvgI := traces[i].flat / uint64(traces[i].hit)
+		flatAvgJ := traces[j].flat / uint64(traces[j].hit)
+		if flatAvgI != flatAvgJ {
+			return flatAvgI > flatAvgJ
+		}
+
+		flatPercentI := 100 * float64(traces[i].flat) / float64(totalCycles)
+		flatPercentJ := 100 * float64(traces[j].flat) / float64(totalCycles)
+		if flatPercentI != flatPercentJ {
+			return flatPercentI > flatPercentJ
+		}
+
+		if traces[i].flat != traces[j].flat {
+			return traces[i].flat > traces[j].flat
+		}
+
+		return traces[i].hit > traces[j].hit
+	})
+
 	sumElapsed := uint64(0)
-	for _, t := range Profiler.traces {
+	for _, t := range traces {
 		if t.hit == 0 {
 			continue
 		}
@@ -104,10 +136,20 @@ func End() {
 }
 
 //go:nosplit
-func begin(name string) trace {
+func caller(ptr unsafe.Pointer) uintptr {
+	return *(*uintptr)(add(ptr, -int(unsafe.Sizeof(ptr))))
+}
+
+func add(p unsafe.Pointer, x int) unsafe.Pointer {
+	return unsafe.Pointer(uintptr(p) + uintptr(x))
+}
+
+//go:nosplit
+func begin(pc uintptr, name string) trace {
+	pc = caller(unsafe.Pointer(&pc))
+
 	var t trace
 
-	pc, _, _, _ := runtime.Caller(2)
 	if name == "" {
 		f := runtime.FuncForPC(pc)
 		if f != nil {
