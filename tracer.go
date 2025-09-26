@@ -129,12 +129,22 @@ func End() {
 			continue
 		}
 
+		name := t.name
+		if name == "" {
+			f := runtime.FuncForPC(t.pc)
+			if f != nil {
+				name = f.Name()
+			} else {
+				name = "unknown"
+			}
+		}
+
 		sumElapsed += t.flat
 		flatPercent := 100 * float64(t.flat) / float64(totalCycles)
 		avgCycles := t.flat / uint64(t.hit)
 		avgMsec := cyclesToMsec(avgCycles)
 
-		fmt.Fprintf(os.Stderr, "%8d %11.2f %11.2f %11.2f %7.2f%% %s\n", t.hit, avgMsec, cyclesToMsec(t.flat), cyclesToMsec(t.cum), flatPercent, t.name)
+		fmt.Fprintf(os.Stderr, "%8d %11.2f %11.2f %11.2f %7.2f%% %s\n", t.hit, avgMsec, cyclesToMsec(t.flat), cyclesToMsec(t.cum), flatPercent, name)
 	}
 
 	fmt.Fprintf(os.Stderr, "Total: time %.2fms, cycles %d, accounted %.2fms (%.2f%%)\n", totalMsec, totalCycles, cyclesToMsec(sumElapsed), 100*float64(sumElapsed)/float64(totalCycles))
@@ -154,15 +164,6 @@ func begin(pc uintptr, name string) trace {
 	pc = caller(unsafe.Pointer(&pc))
 
 	var t trace
-
-	if name == "" {
-		f := runtime.FuncForPC(pc)
-		if f != nil {
-			name = f.Name()
-		} else {
-			name = "unknown"
-		}
-	}
 
 	t.pc = pc
 	t.id = idx(pc)
