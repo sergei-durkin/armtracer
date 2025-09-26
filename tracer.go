@@ -51,10 +51,7 @@ func init() {
 
 //go:nosplit
 func BeginTrace(name string) trace {
-	c, _, _, _ := runtime.Caller(1)
-	f := runtime.FuncForPC(c)
-
-	return begin(f.Entry(), name)
+	return begin(name)
 }
 
 //go:nosplit
@@ -107,9 +104,10 @@ func End() {
 }
 
 //go:nosplit
-func begin(pc uintptr, name string) trace {
+func begin(name string) trace {
 	var t trace
 
+	pc, _, _, _ := runtime.Caller(2)
 	if name == "" {
 		f := runtime.FuncForPC(pc)
 		if f != nil {
