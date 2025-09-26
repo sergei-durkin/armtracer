@@ -1,3 +1,6 @@
+//go:build armtracer
+// +build armtracer
+
 package armtracer
 
 import (
