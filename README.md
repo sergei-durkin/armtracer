@@ -12,6 +12,7 @@ Add `armtracer` to your project:
 go get github.com/sergei-durkin/armtracer
 ```
 
+
 ## Usage
 
 Basic example:
@@ -40,7 +41,7 @@ func someWork() {
 
 Example output:
 ```bash
-$ go run ./cmd/main.go
+$ go run -tags=armtracer ./cmd/main.go
 
 CPU Frequency: 24.00 MHz
     Hits    Avg (ms)   Flat (ms)    Cum (ms)    Flat% Function
@@ -51,7 +52,7 @@ Total: time 0.13ms, cycles 3103, accounted 0.03ms (25.72%)
 
 ## Comparison with builtin timers
 ```bash
-$ go run ./cmd/main.go
+$ go run -tags=armtracer ./cmd/main.go
 
 CPU Frequency: 24.00 MHz
     Hits    Avg (ms)   Flat (ms)    Cum (ms)    Flat% Function
