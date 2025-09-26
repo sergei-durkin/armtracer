@@ -12,6 +12,7 @@ const (
 	size = 1 << 14
 )
 
+func isb()
 func getCntvct() uint64
 func getCntfrq() uint64
 
@@ -53,6 +54,7 @@ func init() {
 
 //go:nosplit
 func BeginTrace(name string) trace {
+	isb()
 	pc := caller(unsafe.Pointer(&name))
 
 	return begin(pc, name)
