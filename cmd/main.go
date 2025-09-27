@@ -118,7 +118,20 @@ func SuperFunction() {
 func GigaFunction() {
 	defer armtracer.EndTrace(armtracer.BeginTrace("GigaFunction"))
 
-	for i := 0; i < 1000000000; i++ {
-		_ = i * i
+	slice := []*int{}
+	for i := 0; i < int(rand.Int31n(500)); i++ {
+		slice = append(slice, getIntPtr())
 	}
+
+	for i := 0; i < 1000; i++ {
+		_ = i * i
+		slice[i%len(slice)] = getIntPtr()
+	}
+}
+
+func getIntPtr() *int {
+	defer armtracer.EndTrace(armtracer.BeginTrace(""))
+	var x int
+
+	return &x
 }

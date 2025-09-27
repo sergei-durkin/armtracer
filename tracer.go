@@ -41,7 +41,8 @@ type profiler struct {
 	start uint64
 	end   uint64
 
-	traces []trace
+	traces        []trace
+	startMemStats runtime.MemStats
 }
 
 var (
@@ -85,14 +86,27 @@ func EndTrace(t trace) {
 
 func Begin() {
 	Profiler.traces = make([]trace, size)
+	runtime.ReadMemStats(&Profiler.startMemStats)
+
 	Profiler.start = getCntvct()
 }
 
 func End() {
 	Profiler.end = getCntvct()
+
+	var endMemStats runtime.MemStats
+	runtime.ReadMemStats(&endMemStats)
+
+	allocBytes := endMemStats.Alloc - Profiler.startMemStats.Alloc
+	mallocs := endMemStats.Mallocs - Profiler.startMemStats.Mallocs
+	frees := endMemStats.Frees - Profiler.startMemStats.Frees
+	numGC := endMemStats.NumGC - Profiler.startMemStats.NumGC
+	heapObj := endMemStats.HeapObjects - Profiler.startMemStats.HeapObjects
+
 	totalCycles := Profiler.end - Profiler.start
 	totalMsec := cyclesToMsec(totalCycles)
 
+	fmt.Fprintf(os.Stderr, "CPU stats:\n")
 	fmt.Fprintf(os.Stderr, "%8s %11s %11s %11s %8s %s\n", "Hits", "Avg (ms)", "Flat (ms)", "Cum (ms)", "Flat%", "Function")
 
 	traces := Profiler.traces
@@ -146,6 +160,11 @@ func End() {
 
 		fmt.Fprintf(os.Stderr, "%8d %11.2f %11.2f %11.2f %7.2f%% %s\n", t.hit, avgMsec, cyclesToMsec(t.flat), cyclesToMsec(t.cum), flatPercent, name)
 	}
+
+	fmt.Fprintf(os.Stderr, "\nMemory stats:\n")
+
+	fmt.Fprintf(os.Stderr, "%8s %11s %8s %8s %8s\n", "Heap Obj", "Alloc bytes", "Mallocs", "Frees", "NumGC")
+	fmt.Fprintf(os.Stderr, "%8d %11d %8d %8d %8d\n", heapObj, allocBytes, mallocs, frees, numGC)
 
 	fmt.Fprintf(os.Stderr, "Total: time %.2fms, cycles %d, accounted %.2fms (%.2f%%)\n", totalMsec, totalCycles, cyclesToMsec(sumElapsed), 100*float64(sumElapsed)/float64(totalCycles))
 }
