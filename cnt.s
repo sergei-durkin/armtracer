@@ -1,4 +1,4 @@
-//+build arm64,!gccgo,!noasm,!appengine
+//+build arm64,armtracer,!gccgo,!noasm
 
 #include "textflag.h"
 
