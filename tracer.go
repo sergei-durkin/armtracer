@@ -91,6 +91,20 @@ func Begin() {
 	Profiler.start = getCntvct()
 }
 
+type resultRow struct {
+	name string
+
+	hits string
+
+	flatMs      string
+	flatPercent string
+	flatNsPerOp string
+
+	cumMs      string
+	cumPercent string
+	cumNsPerOp string
+}
+
 func End() {
 	Profiler.end = getCntvct()
 
@@ -106,9 +120,6 @@ func End() {
 	totalCycles := Profiler.end - Profiler.start
 	totalMsec := cyclesToMsec(totalCycles)
 
-	fmt.Fprintf(os.Stderr, "CPU stats:\n")
-	fmt.Fprintf(os.Stderr, "%8s %11s %11s %11s %8s %s\n", "Hits", "Avg (ms)", "Flat (ms)", "Cum (ms)", "Flat%", "Function")
-
 	traces := Profiler.traces
 	sort.Slice(traces, func(i, j int) bool {
 		if traces[i].hit == 0 {
@@ -118,10 +129,10 @@ func End() {
 			return true
 		}
 
-		flatAvgI := traces[i].flat / uint64(traces[i].hit)
-		flatAvgJ := traces[j].flat / uint64(traces[j].hit)
-		if flatAvgI != flatAvgJ {
-			return flatAvgI > flatAvgJ
+		nsPerOpI := cyclesToNsec(traces[i].flat) / float64(traces[i].hit)
+		nsPerOpJ := cyclesToNsec(traces[j].flat) / float64(traces[j].hit)
+		if nsPerOpI != nsPerOpJ {
+			return nsPerOpI > nsPerOpJ
 		}
 
 		flatPercentI := 100 * float64(traces[i].flat) / float64(totalCycles)
@@ -137,11 +148,26 @@ func End() {
 		return traces[i].hit > traces[j].hit
 	})
 
+	hitsLn := 4
+
+	flatMsLn := 8
+	flatPercentLn := 8
+	flatNsPerOpLn := 11
+
+	cumMsLn := 8
+	cumPercentLn := 8
+	cumNsPerOpLn := 11
+
+	nameLn := 11
+
+	rows := make([]resultRow, 0, len(traces))
 	sumElapsed := uint64(0)
 	for _, t := range traces {
 		if t.hit == 0 {
 			continue
 		}
+
+		var r resultRow
 
 		name := t.name
 		if name == "" {
@@ -155,18 +181,132 @@ func End() {
 
 		sumElapsed += t.flat
 		flatPercent := 100 * float64(t.flat) / float64(totalCycles)
-		avgCycles := t.flat / uint64(t.hit)
-		avgMsec := cyclesToMsec(avgCycles)
+		flatNsPerOp := cyclesToNsec(t.flat) / float64(t.hit)
 
-		fmt.Fprintf(os.Stderr, "%8d %11.2f %11.2f %11.2f %7.2f%% %s\n", t.hit, avgMsec, cyclesToMsec(t.flat), cyclesToMsec(t.cum), flatPercent, name)
+		cumPercent := 100 * float64(t.cum) / float64(totalCycles)
+		cumNsPerOp := cyclesToNsec(t.cum) / float64(t.hit)
+
+		r.name = fmt.Sprintf("%s", name)
+		nameLn = max(nameLn, len(r.name))
+
+		r.hits = fmt.Sprintf("%d", t.hit)
+		hitsLn = max(hitsLn, len(r.hits))
+
+		r.flatMs = fmt.Sprintf("%.4fms", cyclesToMsec(t.flat))
+		flatMsLn = max(flatMsLn, len(r.flatMs))
+
+		r.flatPercent = fmt.Sprintf("%.4f%%", flatPercent)
+		flatPercentLn = max(flatPercentLn, len(r.flatPercent))
+
+		r.flatNsPerOp = fmt.Sprintf("%.2fns/op", flatNsPerOp)
+		flatNsPerOpLn = max(flatNsPerOpLn, len(r.flatNsPerOp))
+
+		r.cumMs = fmt.Sprintf("%.4fms", cyclesToMsec(t.cum))
+		cumMsLn = max(cumMsLn, len(r.cumMs))
+
+		r.cumPercent = fmt.Sprintf("%.4f%%", cumPercent)
+		cumPercentLn = max(cumPercentLn, len(r.cumPercent))
+
+		r.cumNsPerOp = fmt.Sprintf("%.2fns/op", cumNsPerOp)
+		cumNsPerOpLn = max(cumNsPerOpLn, len(r.cumNsPerOp))
+
+		rows = append(rows, r)
+	}
+
+	fmt.Fprintf(os.Stderr, "\nCPU stats:\n")
+	{
+
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", hitsLn, "hits")
+
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", flatMsLn, "flat ms")
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", flatPercentLn, "flat %")
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", flatNsPerOpLn, "flat ns/op")
+
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", cumMsLn, "cum[ms]")
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", cumPercentLn, "cum[%]")
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |", cumNsPerOpLn, "cum[ns/op]")
+
+		fmt.Fprintf(os.Stderr, "| %-[1]*s |\n", nameLn, "function")
+
+		{ // print divider
+			sum := hitsLn + flatMsLn + flatPercentLn + flatNsPerOpLn + cumMsLn + cumPercentLn + cumNsPerOpLn + nameLn + 32
+			hr := make([]byte, sum+1)
+			for i := 0; i < sum; i++ {
+				hr[i] = '='
+			}
+			hr[sum] = '\n'
+
+			fmt.Fprint(os.Stderr, string(hr))
+		}
+
+		for i := 0; i < len(rows); i++ {
+			r := rows[i]
+
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", hitsLn, r.hits)
+
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", flatMsLn, r.flatMs)
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", flatPercentLn, r.flatPercent)
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", flatNsPerOpLn, r.flatNsPerOp)
+
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", cumMsLn, r.cumMs)
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", cumPercentLn, r.cumPercent)
+			fmt.Fprintf(os.Stderr, "| %[1]*s |", cumNsPerOpLn, r.cumNsPerOp)
+
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |", nameLn, r.name)
+
+			fmt.Fprint(os.Stderr, "\n")
+		}
 	}
 
 	fmt.Fprintf(os.Stderr, "\nMemory stats:\n")
+	{
+		heapObjStr := fmt.Sprintf("%d", heapObj)
+		heapObjLn := max(8, len(heapObjStr))
 
-	fmt.Fprintf(os.Stderr, "%8s %11s %8s %8s %8s\n", "Heap Obj", "Alloc bytes", "Mallocs", "Frees", "NumGC")
-	fmt.Fprintf(os.Stderr, "%8d %11d %8d %8d %8d\n", heapObj, allocBytes, mallocs, frees, numGC)
+		allocBytesStr := fmt.Sprintf("%d", allocBytes)
+		allocBytesLn := max(11, len(allocBytesStr))
 
-	fmt.Fprintf(os.Stderr, "Total: time %.2fms, cycles %d, accounted %.2fms (%.2f%%)\n", totalMsec, totalCycles, cyclesToMsec(sumElapsed), 100*float64(sumElapsed)/float64(totalCycles))
+		mallocsStr := fmt.Sprintf("%d", mallocs)
+		mallocsLn := max(8, len(mallocsStr))
+
+		freesStr := fmt.Sprintf("%d", frees)
+		freesLn := max(8, len(freesStr))
+
+		numGCStr := fmt.Sprintf("%d", numGC)
+		numGCLn := max(8, len(numGCStr))
+
+		{ // memory stats header
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |", heapObjLn, "heap obj")
+
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |", allocBytesLn, "alloc bytes")
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |", mallocsLn, "mallocs")
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |", freesLn, "frees")
+
+			fmt.Fprintf(os.Stderr, "| %-[1]*s |\n", numGCLn, "num gc")
+		}
+
+		{ // print divider
+			sum := heapObjLn + allocBytesLn + mallocsLn + freesLn + numGCLn + 20
+			hr := make([]byte, sum+1)
+			for i := 0; i < sum; i++ {
+				hr[i] = '='
+			}
+			hr[sum] = '\n'
+			fmt.Fprint(os.Stderr, string(hr))
+		}
+
+		{ // memory stats row
+			fmt.Fprintf(os.Stderr, "| %[1]*d |", heapObjLn, heapObj)
+
+			fmt.Fprintf(os.Stderr, "| %[1]*d |", allocBytesLn, allocBytes)
+			fmt.Fprintf(os.Stderr, "| %[1]*d |", mallocsLn, mallocs)
+			fmt.Fprintf(os.Stderr, "| %[1]*d |", freesLn, frees)
+
+			fmt.Fprintf(os.Stderr, "| %[1]*d |\n", numGCLn, numGC)
+		}
+	}
+
+	fmt.Fprintf(os.Stderr, "\nTotal: time %.2fms, cycles %d, accounted %.2fms (%.2f%%)\n", totalMsec, totalCycles, cyclesToMsec(sumElapsed), 100*float64(sumElapsed)/float64(totalCycles))
 }
 
 //go:nosplit
@@ -210,4 +350,12 @@ func cyclesToMsec(c uint64) float64 {
 	}
 
 	return 1000 * float64(c) / float64(CPUFreqHz)
+}
+
+func cyclesToNsec(c uint64) float64 {
+	if CPUFreqHz == 0 {
+		return 0
+	}
+
+	return 1000000000 * float64(c) / float64(CPUFreqHz)
 }

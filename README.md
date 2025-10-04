@@ -44,10 +44,19 @@ Example output:
 $ go run -tags=armtracer ./cmd/main.go
 
 CPU Frequency: 24.00 MHz
-    Hits    Avg (ms)   Flat (ms)    Cum (ms)    Flat% Function
-       1        0.02        0.02        0.03   13.25% main.run
-     100        0.00        0.02        0.02   12.47% someWork
-Total: time 0.13ms, cycles 3103, accounted 0.03ms (25.72%)
+
+CPU stats:
+| hits || flat ms  || flat %   || flat ns/op   || cum[ms]  || cum[%]   || cum[ns/op]    || function    |
+========================================================================================================
+|    1 || 0.0039ms ||  6.3179% || 3875.00ns/op || 0.0185ms || 30.2310% || 18541.67ns/op || main.run    |
+|  100 || 0.0147ms || 23.9130% ||  146.67ns/op || 0.0147ms || 23.9130% ||   146.67ns/op || someWork    |
+
+Memory stats:
+| heap obj || alloc bytes || mallocs  || frees    || num gc   |
+===============================================================
+|        5 ||         176 ||        6 ||        1 ||        0 |
+
+Total: time 0.06ms, cycles 1472, accounted 0.02ms (30.23%)
 ```
 
 ## Comparison with builtin timers
@@ -55,12 +64,21 @@ Total: time 0.13ms, cycles 3103, accounted 0.03ms (25.72%)
 $ go run -tags=armtracer ./cmd/main.go
 
 CPU Frequency: 24.00 MHz
-    Hits    Avg (ms)   Flat (ms)    Cum (ms)    Flat% Function
-       1      607.40      607.40      607.40   57.88% timerCalls
-       1      360.26      360.26      441.92   34.33% tracerCalls
-       1        0.01        0.01     1049.33    0.00% e
-10000000        0.00       81.66       81.66    7.78% main.millionTracerCalls
-Total: time 1049.33ms, cycles 25183961, accounted 1049.33ms (100.00%)
+
+CPU stats:
+| hits     || flat ms    || flat %   || flat ns/op        || cum[ms]    || cum[%]   || cum[ns/op]        || function                |
+=====================================================================================================================================
+|        1 || 558.8115ms || 64.5928% || 558811458.33ns/op || 558.8115ms || 64.5928% || 558811458.33ns/op || timerCalls              |
+|        1 || 224.8632ms || 25.9919% || 224863250.00ns/op || 306.2867ms || 35.4036% || 306286666.67ns/op || tracerCalls             |
+|        1 ||   0.0008ms ||  0.0001% ||       750.00ns/op || 865.0989ms || 99.9965% || 865098875.00ns/op || e                       |
+| 10000000 ||  81.4234ms ||  9.4117% ||         8.14ns/op ||  81.4234ms ||  9.4117% ||         8.14ns/op || main.millionTracerCalls |
+
+Memory stats:
+| heap obj || alloc bytes || mallocs  || frees    || num gc   |
+===============================================================
+|        0 ||           0 ||        0 ||        0 ||        0 |
+
+Total: time 865.13ms, cycles 20763101, accounted 865.10ms (100.00%)
 ```
 
 ## Notes
